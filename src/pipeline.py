@@ -35,7 +35,9 @@ def build_preprocessing_pipeline(df, target_col='Churn', extra_drop_cols=None):
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('cat', categorical_transformer, categorical_features)
-        ])
+        ],
+        remainder='passthrough'
+        )
         
     # 4. Envoltorio final
     # Se nombra el paso como 'preprocessing' para mantener consistencia con la extraccion de nombres
