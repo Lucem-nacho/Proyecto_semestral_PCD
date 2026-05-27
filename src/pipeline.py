@@ -1,6 +1,6 @@
 """
 Pipeline construction module for the Telecom Churn dataset.
-Combines numerical scaling and categorical encoding.
+Combines numerical scaling and categorical encoding cleanly without Data Leakage.
 """
 
 import pandas as pd
@@ -8,60 +8,50 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
-def build_preprocessing_pipeline(df, target_col='Churn', extra_drop_cols=None):
+def build_preprocessing_pipeline(X_train) -> ColumnTransformer:
     """
-    Builds and returns a scikit-learn preprocessing pipeline.
-    Automatically detects numeric features for scaling and categorical features for encoding.
+    Construye y retorna un ColumnTransformer de Scikit-Learn optimizado.
+    Identifica dinámicamente las columnas numéricas y categóricas basándose 
+    exclusivamente en la matriz de características de entrenamiento (X_train).
     
     Parameters
     ----------
-    df : pandas.DataFrame
-        The input dataframe used to dynamically identify columns.
-    target_col : str, default='Churn'
-        The target variable to exclude from transformations.
-    extra_drop_cols : list of str, optional
-        Additional columns to drop (e.g., identifiers like 'customerID').
+    X_train : pandas.DataFrame
+        La matriz de características de entrenamiento (sin la variable objetivo 'Churn' 
+        ni identificadores como 'customerID').
         
     Returns
     -------
-    sklearn.pipeline.Pipeline
-        The assembled preprocessing pipeline.
+    sklearn.compose.ColumnTransformer
+        El transformador de columnas listo para aplicar .fit_transform()
     """
-    if extra_drop_cols is None:
-        # Se excluye el identificador único por defecto para evitar sobreajuste
-        extra_drop_cols = ['customerID']
-        
-    # Definición de columnas a excluir del entrenamiento
-    cols_to_exclude = [target_col] + extra_drop_cols
-    feature_df = df.drop(columns=[col for col in cols_to_exclude if col in df.columns], errors='ignore')
+    # 1. Identificación dinámica de tipos de variables basada únicamente en la matriz X
+    numeric_features = X_train.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_features = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
     
-    # Identificación dinámica de tipos de variables
-    numeric_features = feature_df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_features = feature_df.select_dtypes(include=['object', 'category']).columns.tolist()
-    
-    # 1. Transformador para variables numéricas (Estandarización)
+    # 2. Transformador para variables numéricas (Estandarización)
     numeric_transformer = Pipeline(steps=[
         ('scaler', StandardScaler())
     ])
     
-    # 2. Transformador para variables categóricas (One-Hot Encoding)
-    # drop='first' ayuda a evitar la multicolinealidad perfecta (Dummy Variable Trap)
+    # 3. Transformador para variables categóricas (One-Hot Encoding)
+    # CORRECCIÓN CRÍTICA: Se cambia handle_unknown a 'error' para convivir con drop='first'.
+    # drop='first' es obligatorio para mitigar la trampa de la variable dummy en modelos lineales.
     categorical_transformer = Pipeline(steps=[
-        ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
+        ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='error'))
     ])
     
-    # 3. Ensamblaje en ColumnTransformer
+    # 4. Ensamblaje definitivo en ColumnTransformer
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('cat', categorical_transformer, categorical_features)
         ],
-        remainder='passthrough'
+        remainder='passthrough' # Mantiene intactas columnas binarias pre-calculadas si existiesen
     )
-        
-    # 4. Envoltorio final
-    pipeline = Pipeline(steps=[
-        ('preprocessing', preprocessor)
-    ])
     
-    return pipeline
+    print(f"⚙️ Pipeline estructurado con éxito:")
+    print(f"   • {len(numeric_features)} Características Numéricas escaladas.")
+    print(f"   • {len(categorical_features)} Características Categóricas codificadas (drop='first').")
+        
+    return preprocessor

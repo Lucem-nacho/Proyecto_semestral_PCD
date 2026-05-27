@@ -7,34 +7,35 @@ import pandas as pd
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Cleans the raw DataFrame by handling missing values in specific columns
-    and mapping the target variable to numeric format.
+    Limpia el DataFrame crudo resolviendo inconsistencias de tipos de datos,
+    removiendo ruido estructural y codificando la variable objetivo de forma idempotente.
     
     Parameters
     ----------
     df : pandas.DataFrame
-        The raw input DataFrame.
+        El DataFrame crudo de entrada.
         
     Returns
     -------
     pandas.DataFrame
-        The cleaned DataFrame ready for pipeline processing.
+        El DataFrame limpio y estandarizado listo para el pipeline de características.
     """
     df_copy = df.copy()
     
-    # Imputación profesional: Reemplazamos espacios en blanco o celdas vacías por '0'
-    # La regex '^\s+$|^$' asegura capturar espacios múltiples o cadenas vacías absolutas
+    # 1. Imputación profesional e ingeniería de tipos para la columna defectuosa
     if 'TotalCharges' in df_copy.columns:
-        df_copy['TotalCharges'] = pd.to_numeric(
-            df_copy['TotalCharges'].replace(r'^\s+$|^$', '0', regex=True), 
-            errors='coerce'
-        ).fillna(0.0)
+        # La regex captura de forma segura espacios múltiples o celdas vacías absolutas
+        df_copy['TotalCharges'] = df_copy['TotalCharges'].replace(r'^\s+$|^$', '0', regex=True)
+        df_copy['TotalCharges'] = pd.to_numeric(df_copy['TotalCharges'], errors='coerce').fillna(0.0)
 
-    # Mapeo del Target: Vital para que la IA (modelos de clasificación) entienda las clases
+    # 2. Mapeo Idempotente del Target y Forzado de Tipo Numérico Puro
+    # CORRECCIÓN CRÍTICA: Se añade pd.to_numeric y .astype(int) para asegurar que scikit-learn
+    # no reciba un tipo 'object' o mixto, solucionando el error 'Unknown label type: unknown'.
     if 'Churn' in df_copy.columns:
-        df_copy['Churn'] = df_copy['Churn'].map({'Yes': 1, 'No': 0})
+        df_copy['Churn'] = df_copy['Churn'].replace({'Yes': 1, 'No': 0})
+        df_copy['Churn'] = pd.to_numeric(df_copy['Churn'], errors='coerce').fillna(0).astype(int)
     
-    # Eliminamos el identificador porque es ruido (no aporta valor predictivo)
+    # 3. Eliminación de ruido estructural (Identificadores sin poder predictivo)
     if 'customerID' in df_copy.columns:
         df_copy = df_copy.drop(columns=['customerID'])
         

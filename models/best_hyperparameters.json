@@ -1,0 +1,5 @@
+{
+    "classifier": "LogisticRegression",
+    "lr_C": 9.834055150624275,
+    "lr_solver": "lbfgs"
+}

@@ -1,95 +1,87 @@
 """
-Main orchestrator for the Telecom Churn ETL pipeline.
-Executes auditing, cleaning, preprocessing, and exporting.
+Main orchestrator for the Telecom Churn Machine Learning Pipeline.
+Executes the complete life cycle: Auditing, Anti-Leakage Preprocessing,
+Hyperparameter Optimization (Optuna), Final Training, and Dynamic Evaluation.
 
 Usage:
     python main.py
 """
 
-import pandas as pd
 import traceback
 from pathlib import Path
 
-# Imports locales del proyecto
+# Imports de la arquitectura modular de soporte (Cero acoplamiento)
 from src.audit import audit_data
-from src.transformers import clean_data
-from src.pipeline import build_preprocessing_pipeline
+from src.data_preprocessing import load_and_preprocess_data  # Ajustar a src.data_prep si cambiaste el nombre
+from src.hyperparameter_tuning import optimize_hyperparameters
+from src.model_training import train_final_model
+from src.model_evaluation import evaluate_predictions
 
 def main():
-    """Executes the complete ETL pipeline."""
-    print("="*60)
-    print("📡 PIPELINE DE DATOS: ROTACIÓN DE CLIENTES (TELECOM CHURN)")
-    print("="*60)
+    """Orquesta el ciclo completo de Machine Learning sin intervención manual."""
+    print("="*70)
+    print("📡 SISTEMA MAESTRO DE IA: DETECCIÓN DE FUGA DE CLIENTES (TELCO CHURN)")
+    print("="*70)
     
     try:
-        # ============ 1. EXTRACCIÓN (CARGA DE DATOS) ============
-        print("\n📥 Fase 1: Extracción de datos")
-        # Ojo: Buscamos en la carpeta "Raw" con mayúscula, tal como la crearon
-        data_dir = Path("data/Raw") 
+        # ============ 1. EXTRACCIÓN Y LOCALIZACIÓN ============
+        print("\n📥 FASE 1: Extracción y localización de fuentes")
+        data_dir = Path("data/Raw")
+        if not data_dir.exists():
+            data_dir = Path("data/raw")
+            
         csv_files = list(data_dir.glob('*.csv'))
-        
         if not csv_files:
-            print(f"❌ Error: No se encontró ningún archivo CSV en {data_dir}")
+            print(f"❌ Error crítico: No se encontró ningún archivo CSV en {data_dir}")
             return
             
         raw_path = csv_files[0]
-        print(f"📁 Procesando archivo: {raw_path.name}")
+        print(f"   • Archivo identificado para procesamiento: {raw_path.name}")
 
-        # ============ 2. AUDITORÍA INICIAL ============
-        print("\n🔍 Fase 2: Auditoría de integridad")
+        # ============ 2. AUDITORÍA ESTRUCTURAL ============
+        print("\n🔍 FASE 2: Auditoría automatizada de esquema e integridad")
         if not audit_data(raw_path): 
-            print("❌ Error: El archivo no pasó la auditoría.")
+            print("❌ Error de integridad: El archivo no cumple con el contrato de datos mínimo.")
             return
 
-        # ============ 3. LIMPIEZA ESTRUCTURAL ============
-        print("\n🧹 Fase 3: Limpieza estructural y de formato")
-        df_raw = pd.read_csv(raw_path)
-        df_cleaned = clean_data(df_raw)
+        # ============ 3. PREPROCESAMIENTO ROBUSTO (ANTI-LEAKAGE) ============
+        print("\n🏗️  FASE 3: Aislamiento de conjuntos y preprocesamiento diferenciado")
+        # El módulo load_and_preprocess_data carga, limpia con transformers.py,
+        # separa en Train/Test de forma estratificada y aplica las transformaciones de forma aislada.
+        X_train, X_test, y_train, y_test = load_and_preprocess_data(test_size=0.2, random_state=42)
+        print("   ✅ Matrices de datos consolidadas en memoria sin Data Leakage.")
 
-        # ============ 4. PREPROCESAMIENTO (PIPELINE) ============
-        print("\n🏗️  Fase 4: Construcción y aplicación del Pipeline")
-        
-        # Separamos 'X' e 'y' en el momento exacto (justo antes del entrenamiento)
-        target_col = 'Churn'
-        y = df_cleaned[target_col] if target_col in df_cleaned.columns else None
-        X = df_cleaned.drop(columns=[target_col], errors='ignore')
-        
-        # Construimos el pipeline y transformamos SOLO las variables predictoras (X)
-        pipeline = build_preprocessing_pipeline(X, target_col=target_col)
-        X_processed = pipeline.fit_transform(X)
-        
-        # Reconstrucción de columnas (Limpieza de nombres de Scikit-Learn)
-        try:
-            feature_names = pipeline.named_steps['preprocessing'].get_feature_names_out()
-            feature_names = [n.split('__')[-1] for n in feature_names]
-        except Exception:
-            feature_names = [f"feature_{i}" for i in range(X_processed.shape[1])]
-            
-        df_final = pd.DataFrame(X_processed, columns=feature_names, index=X.index)
-        
-        # Re-acoplamos la variable objetivo (y) limpia al final del dataset
-        if y is not None:
-            df_final[target_col] = y
-        
-        # ============ 5. CARGA (GUARDADO FINAL) ============
-        print("\n💾 Fase 5: Guardado del dataset procesado")
-        output_dir = Path("data/processed")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / "processed_data.csv"
+        # ============ 4. OPTIMIZACIÓN DE HIPERPARAMETROS ============
+        print("\n🚀 FASE 4: Ejecución del experimento paramétrico (Optuna)")
+        # Llama a Optuna. Ejecuta 8 trials x 3 folds = 24 entrenamientos exactos. Exporta el JSON.
+        mejores_params = optimize_hyperparameters(X_train, y_train, n_trials=8, cv=3)
 
-        df_final.to_csv(output_path, index=False)
+        # ============ 5. ENTRENAMIENTO DEFINITIVO (PERSISTENCIA) ============
+        print("\n🚂 FASE 5: Consolidación del modelo campeón en disco duro")
+        # Lee el JSON generado en el paso anterior, entrena con el 100% de Train y guarda el archivo .joblib
+        modelo_final = train_final_model(X_train, y_train)
+
+        # ============ 6. EVALUACIÓN PRESCRIPTIVA EN TEST ============
+        print("\n📊 FASE 6: Evaluación analítica final en el conjunto de control")
+        # Ejecuta la evaluación aplicando el umbral optimizado de negocio (0.35) que propusimos
+        resumen_metricas = evaluate_predictions(modelo_final, X_test, y_test, threshold=0.35)
         
-        # ============ RESUMEN FINAL ============
-        print("\n" + "="*60)
-        print("✅ PIPELINE COMPLETADO EXITOSAMENTE")
-        print("="*60)
-        print(f"   • Archivo generado:   {output_path}")
-        print(f"   • Dimensiones finales: {df_final.shape}")
-        print("\n✨ ¡Listo para el entrenamiento de Machine Learning!\n")
+        # ============ RESUMEN OPERATIVO FINAL ============
+        print("\n" + "="*70)
+        print("🏆 PIPELINE DE MACHINE LEARNING EJECUTADO DE EXTREMO A EXTREMO")
+        print("="*70)
+        print(f"   • Modelo Consolidado:       models/final_model.joblib")
+        print(f"   • Configuración Guardada:    models/best_hyperparameters.json")
+        print(f"   • Desempeño F1-Score Test:  {resumen_metricas['f1_churn']:.4f}")
+        print(f"   • Capacidad AUC-ROC:        {resumen_metricas['auc_roc']:.4f}")
+        print(f"   • Alarmas de Fuga Emitidas: {resumen_metricas['falsos_positivos'] + resumen_metricas['falsos_negativos'] + int(y_test.sum())}")
+        print("="*70)
+        print("✨ ¡Solución lista para la toma de decisiones estratégicas!\n")
 
     except Exception as e:
-        print(f"\n❌ FATAL ERROR: {e}")
+        print(f"\n❌ FATAL ERROR EN EL PROCESO ORQUESTRADOR: {e}")
         traceback.print_exc()
 
 if __name__ == "__main__":
     main()
+    
