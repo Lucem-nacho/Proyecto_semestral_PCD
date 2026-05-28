@@ -26,7 +26,6 @@ El pipeline desarrollado garantiza que los datos están listos para la fase de m
 
 Este reporte ahora incluye los resultados algorítmicos (Accuracy, F1-Score, AUC), el análisis de clústeres y las recomendaciones de negocio. 
 
-```markdown
 # Reporte Técnico: Predicción y Segmentación de Fuga de Clientes (Telco)
 
 ## 1. Introducción
