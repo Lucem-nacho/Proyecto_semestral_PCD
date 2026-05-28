@@ -1,5 +1,6 @@
 {
-    "classifier": "LogisticRegression",
-    "lr_C": 1.2717635032762056,
-    "lr_solver": "liblinear"
+    "classifier": "RandomForest",
+    "rf_n_estimators": 50,
+    "rf_max_depth": 15,
+    "rf_min_samples_split": 8
 }
